@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Demo</title>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+      integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI="
+      crossorigin=""
+    />
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+      integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM="
+      crossorigin=""
+    ></script>
+
+    <style>
+      body {
+        margin: 0;
+      }
+
+      #map {
+        height: 100vh;
+        width: 100vw;
+      }
+
+      .address-field {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 10000;
+
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      input {
+        border-radius: 5px;
+        border: 2px solid rgba(0, 0, 0, 0.2);
+        background-color: #fff;
+        padding: 0 10px;
+        width: 240px;
+        height: 34px;
+        font-size: 15px;
+      }
+
+      #results {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      #results div.result {
+        border-radius: 5px;
+        border: 2px solid rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        padding: 4px 10px;
+        max-width: 240px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <div class="address-field">
+      <input id="search" type="text" placeholder="جستجو آدرس" />
+      <!-- search results -->
+      <div id="results"></div>
+    </div>
+
+    <script>
+      // search stuff
+      const search = document.getElementById("search");
+      const results = document.getElementById("results");
+      //   search on keyup was enter
+      search.addEventListener("keyup", async (e) => {
+        if (e.key === "Enter") {
+          results.innerHTML = "";
+
+          const q = e.target.value;
+
+          if (!q || q.length < 3) return;
+
+          const data = await fetchSearchByQ(q);
+
+          if (data) {
+            const { features } = data;
+
+            features.forEach((feature) => {
+              const { properties, geometry } = feature;
+              const { coordinates } = geometry;
+              const { display_name } = properties;
+
+              const lat = coordinates[1];
+              const lon = coordinates[0];
+
+              const div = document.createElement("div");
+              div.classList.add("result");
+              div.innerText = display_name;
+              div.addEventListener("click", () => {
+                L.marker([lat, lon])
+                  .addTo(map)
+                  .bindPopup(display_name)
+                  .openPopup();
+
+                // zoom into marker
+                map.setView([lat, lon], 14);
+              });
+
+              results.appendChild(div);
+            });
+          }
+        }
+      });
+
+      // map stuff
+      var map = L.map("map").setView([36.2796485, 50.0060673], 13);
+
+      L.tileLayer("https://map.nroot.ir/styles/OSM OpenMapTiles/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution:
+          '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+
+      //   map on click get lat lon and add marker to map
+      map.on("click", async (e) => {
+        const lat = e.latlng.lat;
+        const lon = e.latlng.lng;
+
+        const address = await fetchReverseByLatLon(lat, lon);
+
+        if (address) {
+          L.marker([lat, lon]).addTo(map).bindPopup(address).openPopup();
+        }
+      });
+
+      const fetchReverseByLatLon = async (lat, lon) => {
+        try {
+          const res = await fetch(
+            `https://nomi.map.nroot.ir/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=20`,
+            {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+                "accept-language": "fa-IR",
+              },
+            }
+          );
+
+          const data = await res.json();
+
+          return data["display_name"];
+        } catch (error) {
+          return undefined;
+        }
+      };
+
+      const fetchSearchByQ = async (q) => {
+        try {
+          const res = await fetch(
+            `https://nomi.map.nroot.ir/search?format=geojson&q=${q}&country=iran`,
+            {
+              method: "GET",
+              headers: {
+                "Content-Type": "application/json",
+                "accept-language": "fa-IR",
+              },
+            }
+          );
+
+          const data = await res.json();
+
+          return data;
+        } catch (error) {
+          return undefined;
+        }
+      };
+    </script>
+  </body>
+</html>
